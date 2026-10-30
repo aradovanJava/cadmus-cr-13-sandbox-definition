@@ -1,0 +1,116 @@
+# CADMUS-CR-13 - sandbox environment check for SC1 (VM1, Windows workstation)
+#
+#   powershell -ExecutionPolicy Bypass -File C:\Lab\verify-cr-env.ps1
+#
+# Knows that SonarQube runs on SQ1 and OWASP ZAP on OWZ1 rather than in a
+# local Docker. If anything reports MISSING or DOWN, tell your instructor
+# before starting the lab.
+#
+# How a tool is judged: OK/MISSING is decided only by whether the command can
+# be found (Get-Command). The version shown next to it is informational; a
+# tool that prints its version oddly can never be reported as MISSING.
+
+$ok = $true
+$staleSession = $false
+
+# The PATH this window inherited, and the PATH the machine actually has now.
+$inheritedPath = $env:Path
+$currentPath   = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' +
+                 [Environment]::GetEnvironmentVariable('Path', 'User')
+
+function Find-Command([string]$cmd, [string]$path) {
+    $saved = $env:Path
+    try { $env:Path = $path; Get-Command $cmd -ErrorAction SilentlyContinue | Select-Object -First 1 }
+    finally { $env:Path = $saved }
+}
+
+function Check-Tool([string]$name, [string]$cmd, [string[]]$argList) {
+    Write-Host -NoNewline ("{0,-18}" -f $name)
+    $c = Find-Command $cmd $currentPath
+    if (-not $c) {
+        Write-Host "MISSING" -ForegroundColor Red
+        $script:ok = $false
+        return
+    }
+    $version = ''
+    try {
+        $lines = @(& $c.Source @argList 2>&1 | ForEach-Object { "$_" })
+        $version = ($lines | Where-Object { $_.Trim() } | Select-Object -First 1)
+    } catch { }
+    if (Find-Command $cmd $inheritedPath) {
+        Write-Host "OK    $version" -ForegroundColor Green
+    } else {
+        Write-Host "OK    $version   (not visible in this window yet - see below)" -ForegroundColor Yellow
+        $script:staleSession = $true
+    }
+}
+
+function Check-Url([string]$name, [string]$url, [switch]$Optional) {
+    Write-Host -NoNewline ("{0,-18}" -f $name)
+    try {
+        $r = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 10
+        $body = "$($r.Content)"
+        if ($body.Length -gt 60) { $body = "HTTP $($r.StatusCode)" }
+        Write-Host "OK    $body" -ForegroundColor Green
+    } catch {
+        if ($Optional) {
+            Write-Host "DOWN  (optional) $url" -ForegroundColor Yellow
+        } else {
+            Write-Host "DOWN  $url" -ForegroundColor Red
+            $script:ok = $false
+        }
+    }
+}
+
+Write-Host "`nCADMUS-CR-13 - sandbox environment check (SC1)`n" -ForegroundColor Cyan
+
+Check-Tool "dotnet"          "dotnet"              @('--version')
+Check-Tool "sonarscanner"    "dotnet-sonarscanner" @()
+Check-Tool "git"             "git"                 @('--version')
+Check-Tool "node"            "node"                @('--version')
+Check-Tool "npm"             "npm"                 @('--version')
+Check-Tool "python"          "python"              @('--version')
+Check-Tool "java"            "java"                @('-version')
+Check-Tool "mvn"             "mvn"                 @('-v')
+Check-Tool "snyk"            "snyk"                @('--version')
+Check-Tool "sqlmap"          "sqlmap"              @('--version')
+Check-Tool "vs code"         "code"                @('--version')
+
+Write-Host -NoNewline ("{0,-18}" -f ".net sdks")
+$dotnet = Find-Command 'dotnet' $currentPath
+if ($dotnet) {
+    $sdks = @(& $dotnet.Source --list-sdks 2>&1 | ForEach-Object { ("$_" -split ' ')[0] } | Where-Object { $_ })
+    $has10 = [bool]($sdks | Where-Object { $_ -like '10.*' })
+    $has9  = [bool]($sdks | Where-Object { $_ -like '9.*' })
+    if ($has10) { Write-Host "OK    $($sdks -join ', ')" -ForegroundColor Green }
+    else { Write-Host "MISSING .NET 10 SDK (found: $($sdks -join ', '))" -ForegroundColor Red; $ok = $false }
+    if (-not $has9) { Write-Host ("{0,-18}" -f "") -NoNewline; Write-Host ".NET 9 SDK not found (optional)" -ForegroundColor Yellow }
+} else { Write-Host "MISSING" -ForegroundColor Red; $ok = $false }
+
+Write-Host -NoNewline ("{0,-18}" -f "c# extension")
+$ext = Get-ChildItem "$env:USERPROFILE\.vscode\extensions" -Directory -Filter 'ms-dotnettools.csharp-*' -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($ext) { Write-Host "OK    $($ext.Name)" -ForegroundColor Green }
+else { Write-Host "not installed for this user (optional: Extensions -> C# Dev Kit)" -ForegroundColor Yellow }
+
+Write-Host -NoNewline ("{0,-18}" -f "postman")
+if (Test-Path "$env:LOCALAPPDATA\Postman\Postman.exe") { Write-Host "OK" -ForegroundColor Green }
+else { Write-Host "not installed for this user (optional)" -ForegroundColor Yellow }
+
+Write-Host -NoNewline ("{0,-18}" -f "application")
+if (Test-Path "C:\Lab\cadmus-vulnshop-dotnet-cr\src\CadmusVulnApp\CadmusVulnApp.csproj") { Write-Host "OK    C:\Lab\cadmus-vulnshop-dotnet-cr" -ForegroundColor Green }
+else { Write-Host "MISSING  git clone https://github.com/aradovanJava/cadmus-vulnshop-dotnet-cr.git C:\Lab\cadmus-vulnshop-dotnet-cr" -ForegroundColor Red; $ok = $false }
+
+Write-Host ""
+Check-Url "sonarqube (SQ1)" "http://localhost:9000/api/system/status"
+Check-Url "zap ui (OWZ1)"   "http://owz1:8080/zap/"
+Check-Url "vulnshop"        "http://127.0.0.1:5080/health" -Optional
+
+Write-Host ""
+if ($staleSession) {
+    Write-Host "Some tools are installed but this window does not see them yet. Run" -ForegroundColor Yellow
+    Write-Host "  powershell -ExecutionPolicy Bypass -File C:\Lab\fix-path.ps1" -ForegroundColor Yellow
+    Write-Host "or sign out of Windows and back in.`n" -ForegroundColor Yellow
+}
+if ($ok) { Write-Host "Sandbox ready." -ForegroundColor Green }
+else     { Write-Host "Something is missing or down - raise it now." -ForegroundColor Red }
+Write-Host "vulnshop is DOWN until you start it with tools\run-app.ps1 - that is expected.`n"

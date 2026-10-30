@@ -1,0 +1,86 @@
+# CADMUS-CR-13 · Secure Coding .NET/C# · sandbox variables
+#
+# Everything an instructor is likely to change lives here.
+
+# --- Trainee account (same on all three machines) ----------------------------
+# The platform's networking stage already creates "user" / "Password123"
+# (administrator / sudo) on every user-accessible host, and the platform's
+# remote access uses that account. The lab is therefore set up for the same
+# account; changing the password here would lock the platform's console and
+# remote-desktop access out. Lab-only credential - never reuse it elsewhere.
+cr13_trainee_user: user
+cr13_trainee_password: "Password123"
+
+# --- Addressing (must match topology.yml) ------------------------------------
+cr13_ip_sc1: 10.10.10.10
+cr13_ip_sq1: 10.10.10.20
+cr13_ip_owz1: 10.10.10.30
+
+# --- Application under test ---------------------------------------------------
+# Participant build of the CR-13 reference application (ASP.NET Core, .NET 10).
+# Cloned onto SC1 and built once during provisioning. Trainees fork it on their
+# own GitHub account for level E1 (GitHub Actions).
+cr13_app_repo: https://github.com/aradovanJava/cadmus-vulnshop-dotnet-cr.git
+cr13_lab_dir: C:\Lab
+cr13_app_dir: C:\Lab\cadmus-vulnshop-dotnet-cr
+cr13_app_project: src\CadmusVulnApp\CadmusVulnApp.csproj
+# tools\run-app.ps1 binds the app to 127.0.0.1 on this port.
+cr13_app_port: 5080
+
+# --- Analysis tools on SQ1 / OWZ1 ---------------------------------------------
+# true  : SonarQube and ZAP are running when the trainee logs in.
+# false : images are pre-pulled but containers are only created, so the
+#         trainee starts them as part of levels A1 / A3
+#         (ssh user@owz1 / sq1, then: cd /opt/cr13 && docker compose up -d).
+cr13_autostart_tools: true
+
+# SonarQube Community Build. Tried in order; the first image that pulls is
+# used. The ECR Public mirror of the Docker Official Image comes first because
+# a whole pool pulling from Docker Hub anonymously hits its rate limit.
+cr13_sonarqube_images:
+  - public.ecr.aws/docker/library/sonarqube:community
+  - docker.io/library/sonarqube:community
+
+cr13_zap_image: ghcr.io/zaproxy/zaproxy:stable
+
+# --- SC1 software stack (framework section 2.1, VM1) --------------------------
+# .NET: the framework lists .NET 9; the application targets .NET 10 (LTS).
+# Both SDKs are installed side by side with Microsoft's dotnet-install script.
+cr13_dotnet_install_script: https://dot.net/v1/dotnet-install.ps1
+cr13_dotnet_channels:
+  - "10.0"
+  - "9.0"
+cr13_dotnet_dir: C:\Program Files\dotnet
+
+# .NET global tools, installed machine-wide into C:\Tools\dotnet-tools (on the
+# machine PATH), so "dotnet sonarscanner ..." works for every account.
+cr13_dotnet_tools:
+  - dotnet-sonarscanner
+
+# Apache Maven is in the framework's VM1 list (inherited from the Java variant
+# of this module); it is installed for parity and needs a JDK.
+cr13_jdk_msi_url: https://download.oracle.com/java/25/latest/jdk-25_windows-x64_bin.msi
+
+cr13_snyk_url: https://static.snyk.io/cli/latest/snyk-win.exe
+cr13_sqlmap_repo: https://github.com/sqlmapproject/sqlmap.git
+
+# Installed with Chocolatey, machine-wide, in this order.
+cr13_choco_packages:
+  - git
+  - maven
+  - nodejs-lts
+  - python
+  - vscode
+
+# VS Code extensions, installed into the trainee's own profile.
+cr13_vscode_extensions:
+  - ms-dotnettools.csharp
+  - ms-dotnettools.csdevkit
+
+# Postman's installer is per-user only, so it is installed in the trainee's
+# own profile. A failure here is reported but does not fail the sandbox.
+cr13_install_postman: true
+
+# Restart SC1 as the last provisioning step, so the trainee's first desktop
+# session starts with the final machine PATH (see README, "Notes").
+cr13_final_reboot: true

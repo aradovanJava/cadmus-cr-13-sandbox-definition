@@ -1,0 +1,61 @@
+CADMUS-CR-13  -  Secure Coding .NET/C#  -  Cyber Range sandbox
+================================================================
+
+You are logged in to SC1, the developer workstation (VM1).
+
+Machines in this sandbox
+------------------------
+  SC1   {{ cr13_ip_sc1 }}   Windows workstation (this machine): .NET 10 and .NET 9 SDKs,
+                       VS Code (C# Dev Kit), SonarScanner for .NET, Git, Node.js,
+                       Python, Snyk CLI, SQLMap, Postman, Maven + JDK 25
+  SQ1   {{ cr13_ip_sq1 }}   SonarQube (SAST) in Docker
+  OWZ1  {{ cr13_ip_owz1 }}   OWASP ZAP (DAST) in Docker
+
+Account on all three machines:  {{ cr13_trainee_user }} / {{ cr13_trainee_password }}
+
+Where things are
+----------------
+  Application source         {{ cr13_app_dir }}
+  Run the application        powershell -ExecutionPolicy Bypass -File {{ cr13_app_dir }}\tools\run-app.ps1
+  Static scan (SonarQube)    powershell -ExecutionPolicy Bypass -File {{ cr13_app_dir }}\tools\scan-sonar.ps1 -Token <token>
+  Environment check          powershell -ExecutionPolicy Bypass -File {{ cr13_lab_dir }}\verify-cr-env.ps1
+  PATH helper                powershell -ExecutionPolicy Bypass -File {{ cr13_lab_dir }}\fix-path.ps1
+  Extra command-line tools   C:\Tools\bin (snyk, sqlmap), C:\Tools\dotnet-tools (dotnet-sonarscanner)
+
+URLs (open them in the browser on SC1)
+--------------------------------------
+  SonarQube                  http://localhost:9000                     (forwarded to SQ1:9000)
+  OWASP ZAP desktop          http://owz1:8080/zap/
+  VulnShop Swagger, SC1      http://127.0.0.1:{{ cr13_app_port }}/swagger            (after tools\run-app.ps1)
+  VulnShop as ZAP sees it    http://sc1:{{ cr13_app_port }}                          (use THIS as the ZAP target)
+  OpenAPI for ZAP to import  http://sc1:{{ cr13_app_port }}/swagger/v1/swagger.json
+
+Notes
+-----
+* SonarQube already runs on SQ1. http://localhost:9000 on SC1 reaches it.
+  First login: admin / admin, then set a throwaway password.
+* The application is an API without HTML pages to crawl, so ZAP's spider
+  finds next to nothing on its own. Import the OpenAPI definition above into
+  ZAP (Import -> Import an OpenAPI Definition from a URL), then run the
+  Active Scan against http://sc1:{{ cr13_app_port }}.
+* ZAP runs on another machine, so it cannot reach 127.0.0.1 on SC1. The
+  application still binds to 127.0.0.1 only. SC1 forwards port {{ cr13_app_port }} on
+  {{ cr13_ip_sc1 }} to it, and the Windows firewall admits that port from OWZ1
+  ({{ cr13_ip_owz1 }}) and nothing else. Do not change the bind address.
+* If a command is "not recognized" although verify-cr-env.ps1 says OK, the
+  window is older than the installation: run fix-path.ps1 or sign out and in.
+* To look at the containers:  ssh {{ cr13_trainee_user }}@sq1   or   ssh {{ cr13_trainee_user }}@owz1
+  then:  cd /opt/cr13 && docker compose ps
+
+Level E1 (CI/CD pipeline)
+-------------------------
+GitHub Actions run on GitHub, not in this sandbox. Fork
+{{ cr13_app_repo | regex_replace('\\.git$', '') }}
+to your own GitHub account, clone the fork, and extend
+.github/workflows/01-starter-build.yml there.
+
+Safety
+------
+VulnShop is deliberately exploitable, including OS command injection.
+Read {{ cr13_app_dir }}\SAFETY.md before running it, and never run it outside
+this sandbox.
