@@ -161,9 +161,14 @@ irm https://raw.githubusercontent.com/aradovanJava/cadmus-cr-13-sandbox-definiti
   version; a tool installed but invisible to an old window is reported in
   yellow with a pointer to `fix-path.ps1`.
 - Snyk requires a free account: trainees run `snyk auth` once.
-- The instructor copy of the application (with the `>>> FIX` remediation notes
-  and the reference E1 pipeline `02-secure-pipeline.yml`) is deliberately not
-  in any public repository.
+- The application repository is the **participant build**: the `>>> VULN`
+  defect markers and the `>>> FIX` remediation notes are removed (comment lines
+  only), as the course's CR1 guide expects, and so is the reference E1 pipeline
+  `02-secure-pipeline.yml`. The instructor copy stays on the LMS, hidden from
+  students, and is deliberately not in any public repository.
+- The application is cloned from `main` when SC1 is provisioned, so a change to
+  the application repository reaches new allocations without a new sandbox
+  definition. A change to this repository needs a new definition and pool.
 
 ---
 
